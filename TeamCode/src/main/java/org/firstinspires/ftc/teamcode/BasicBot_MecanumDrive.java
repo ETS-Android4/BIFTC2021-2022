@@ -51,6 +51,14 @@ public class BasicBot_MecanumDrive extends OpMode
         }
     }
 
+    public double getInputWeight(double primary, double secondary, double tertiary) {
+
+        primary = Math.abs(primary);
+        secondary = Math.abs(secondary);
+        tertiary = Math.abs(tertiary);
+        return primary/(primary + secondary + tertiary);
+    }
+
     /*
      * Code to run ONCE when the driver hits INIT
      */
@@ -107,51 +115,52 @@ public class BasicBot_MecanumDrive extends OpMode
     @Override
     public void loop() {
         // Setup a variable for each drive wheel to save power level for telemetry
-        double leftPower;
-        double rightPower;
+        double leftFrontPower;
+        double rightFrontPower;
+        double leftBackPower;
+        double rightBackPower;
 
         //Get the values of the joysticks in this loop. A very very large number of loops happen every second
         double leftY = gamepad1.left_stick_y;
-        double rightY  =  gamepad1.right_stick_y;
+        double rightX  =  gamepad1.right_stick_X;
         double leftX = gamepad1.left_stick_x;
-
-        MotorSpeeds forwardSpeeds = new MotorSpeeds(leftY, leftY, leftY, leftY);
-
-        MotorSpeeds sidewaysSpeeds = new MotorSpeeds(leftX, -leftX, leftX, -leftX);
-
-        MotorSpeeds rotatingSpeeds = new MotorSpeeds(rightY, -rightY, rightY, -rightY);
-
-        double leftFrontCombined = forwardSpeeds.leftFront*Math.abs(leftY)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY))
-            +sidewaysSpeeds.leftFront*Math.abs(leftX)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY))
-            +rotatingSpeeds.leftFront*Math.abs(rightY)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY));
-
-            double rightBackCombined = forwardSpeeds.rightBack*Math.abs(leftY)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY))
-            +sidewaysSpeeds.rightBack*Math.abs(leftX)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY))
-            +rotatingSpeeds.rightBack*Math.abs(rightY)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY));
-
-            double leftBackCombined = forwardSpeeds.leftBack*Math.abs(leftY)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY))
-            +sidewaysSpeeds.leftBack*Math.abs(leftX)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY))
-            +rotatingSpeeds.leftBack*Math.abs(rightY)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY));
-
-            double rightFrontCombined = forwardSpeeds.rightFront*Math.abs(leftY)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY))
-            +sidewaysSpeeds.rightFront*Math.abs(leftX)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY))
-            +rotatingSpeeds.rightFront*Math.abs(rightY)/(Math.abs(leftY)+Math.abs(leftX)+Math.abs(rightY));
-
-
-        MotorSpeeds combinedSpeeds = new MotorSpeeds(leftFrontCombined, rightFrontCombined, leftBackCombined, rightBackCombined);
 
         //If sticks somehow are over 1/under -1 clip to those (max motor levels)
         leftY = Range.clip(leftY, -1.0, 1.0);
         leftX = Range.clip(leftX, -1.0, 1.0);
-        rightY = Range.clip(rightY, -1.0, 1.0);
+        rightX = Range.clip(rightX, -1.0, 1.0);
 
         //If the sticks are within a "deadzone" defined in Constants.java (.1 range initially) set them to 0
         if(Math.abs(leftY) <= kLeftDeadZoneY){
             leftY = 0;
         }
-        if(Math.abs(rightY) <= kRightDeadZoneY){
-            rightY = 0;
+        if(Math.abs(rightX) <= kRightDeadZoneY){
+            rightX = 0;
         }
+
+        MotorSpeeds forwardSpeeds = new MotorSpeeds(leftY, leftY, leftY, leftY);
+
+        MotorSpeeds sidewaysSpeeds = new MotorSpeeds(-leftX, leftX, leftX, -leftX);
+
+        MotorSpeeds rotatingSpeeds = new MotorSpeeds(rightX, -rightX, rightX, -rightX);
+
+        double leftFrontCombined = forwardSpeeds.leftFront*getInputWeight(leftY, leftX, rightX)
+            +sidewaysSpeeds.leftFront*getInputWeight(leftX, leftY, rightX)
+            +rotatingSpeeds.leftFront*getInputWeight(rightX, leftY, leftX);
+
+        double rightBackCombined = forwardSpeeds.rightBack*getInputWeight(leftY, leftX, rightX)
+            +sidewaysSpeeds.rightBack*getInputWeight(leftX, leftY, rightX)
+            +rotatingSpeeds.rightBack*getInputWeight(rightX, leftY, leftX);
+
+        double leftBackCombined = forwardSpeeds.leftBack*getInputWeight(leftY, leftX, rightX)
+            +sidewaysSpeeds.leftBack*getInputWeight(leftX, leftY, rightX)
+            +rotatingSpeeds.leftBack*getInputWeight(rightX, leftY, leftX);
+
+        double rightFrontCombined = forwardSpeeds.rightFront*getInputWeight(leftY, leftX, rightX)
+            +sidewaysSpeeds.rightFront*getInputWeight(leftX, leftY, rightX)
+            +rotatingSpeeds.rightFront*getInputWeight(rightX, leftY, leftX);
+
+        MotorSpeeds combinedSpeeds = new MotorSpeeds(leftFrontCombined, rightFrontCombined, leftBackCombined, rightBackCombined);
 
         //Send the values to the motors
         leftFrontDrive.setPower(combinedSpeeds.leftFront);
@@ -159,9 +168,14 @@ public class BasicBot_MecanumDrive extends OpMode
         rightFrontDrive.setPower(combinedSpeeds.rightFront);
         rightBackDrive.setPower(combinedSpeeds.rightBack);
 
+        leftFrontPower = combinedSpeeds.leftFront;
+        rightFrontPower = combinedSpeeds.righttFront;
+        leftBackPower = combinedSpeeds.leftBack;
+        rightBackPower = combinedSpeeds.rightBack;
+
         // Show the elapsed game time and wheel power.
         telemetry.addData("Status", "Run Time: " + runtime.toString());
-        telemetry.addData("Motors", "left (%.2f), right (%.2f)", leftY, rightY);
+        telemetry.addData("Motors", "left front (%.2f), right front (%.2f), left back (%.2f), right back (%.2f)", leftFrontPower, rightFrontPower, leftBackPower, rightBackPower);
     }
 
     /*
